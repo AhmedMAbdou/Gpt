@@ -1,0 +1,5 @@
+streamlit==1.34.0  # Use the latest version available
+tensorflow==2.16.1
+opencv-python-headless
+Pillow
+numpy
