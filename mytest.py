@@ -2,10 +2,9 @@ import streamlit as st
 import cv2
 import numpy as np
 import tensorflow as tf
-from PIL import Image
 
 # Function to load TensorFlow Lite model
-@st.cache(allow_output_mutation=True)
+@st.cache_resource
 def load_model(model_path):
     interpreter = tf.lite.Interpreter(model_path=model_path)
     interpreter.allocate_tensors()
@@ -44,32 +43,52 @@ interpreter, input_details, output_details = load_model(model_path)
 labels_path = "models/mobilenet_v1_1.0_224.txt"
 labels = load_labels(labels_path)
 
-# Add a placeholder for displaying the captured image
-img_file_buffer = st.camera_input("Take a picture")
+# Function to display the video stream
+def display_video():
+    cap = cv2.VideoCapture(0)
 
-if img_file_buffer is not None:
-    # Load the image from the buffer
-    image = Image.open(img_file_buffer)
+    if not cap.isOpened():
+        st.error("Error: Could not open webcam.")
+        return
 
-    # Convert the image to a numpy array
-    frame = np.array(image)
+    stframe = st.empty()
 
-    # Preprocess the frame
-    processed_frame = preprocess_frame(frame)
+    # Create a stop button once outside the loop with a unique key
+    stop_button = st.button('Stop', key='stop_button')
 
-    # Perform object detection on the frame
-    output = detect_objects(interpreter, input_details, output_details, processed_frame)
+    while cap.isOpened():
+        ret, frame = cap.read()
 
-    # Extract detected object label and confidence score
-    detected_label = labels[np.argmax(output)]
-    confidence = np.max(output)
+        if not ret:
+            st.error("Error: Failed to capture image.")
+            break
 
-    # Draw the detected label and confidence score on the frame
-    text = f"{detected_label}   {confidence:.2f}"
-    frame = cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        # Preprocess the frame
+        processed_frame = preprocess_frame(frame)
 
-    # Convert frame from BGR to RGB (if necessary, depends on model requirements)
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        # Perform object detection on the frame
+        output = detect_objects(interpreter, input_details, output_details, processed_frame)
 
-    # Display the annotated frame
-    st.image(frame_rgb, caption="Processed Image", use_column_width=True)
+        # Extract detected object label and confidence score
+        detected_label = labels[np.argmax(output)]
+        confidence = np.max(output)
+
+        # Draw the detected label and confidence score on the frame
+        text = f"{detected_label}   {confidence:.2f}"
+        frame = cv2.putText(frame, text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+        # Convert frame from BGR to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Display the frame in Streamlit
+        stframe.image(frame_rgb, channels="RGB")
+
+        # Stop the loop if the stop button is pressed
+        if stop_button:
+            break
+
+    cap.release()
+
+# Add a button to start the video stream
+if st.button('Start Camera', key='start_button'):
+    display_video()
